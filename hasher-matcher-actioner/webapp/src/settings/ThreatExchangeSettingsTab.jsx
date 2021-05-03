@@ -3,15 +3,18 @@
  */
 
 import React, {useEffect, useState} from 'react';
-import Card from 'react-bootstrap/Card';
+import {
+  Col,
+  Row,
+  Button,
+  Toast,
+  Form,
+  Spinner,
+  Tooltip,
+  OverlayTrigger,
+  Card,
+} from 'react-bootstrap';
 import PropTypes from 'prop-types';
-import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
-import Tooltip from 'react-bootstrap/Tooltip';
-import Col from 'react-bootstrap/Col';
-import Row from 'react-bootstrap/Row';
-import Button from 'react-bootstrap/Button';
-import Form from 'react-bootstrap/Form';
-import Modal from 'react-bootstrap/Modal';
 import {CopyableTextField} from '../utils/TextFieldsUtils';
 import {
   fetchAllDatasets,
@@ -22,6 +25,10 @@ import {
 
 export default function ThreatExchangeSettingsTab() {
   const [datasets, setDatasets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(true);
+  const [showToast, setShowToast] = useState(false);
+  const [toastBody, setToastBody] = useState(null);
   const onPrivacyGroupSave = privacyGroup => {
     udpateDataset(
       privacyGroup.privacyGroupId,
@@ -46,6 +53,7 @@ export default function ThreatExchangeSettingsTab() {
   };
   const onSync = () => {
     syncAllDatasets().then(syncResponse => {
+      setSyncing(true);
       if (syncResponse.response === 'Dataset is update-to-date') {
         fetchAllDatasets().then(response => {
           setDatasets(response.datasets_response);
@@ -55,11 +63,9 @@ export default function ThreatExchangeSettingsTab() {
       }
     });
   };
-  const [show, setShow] = useState(false);
-  const handleClose = () => setShow(false);
-  const handleShow = () => setShow(true);
   useEffect(() => {
-    fetchAllDatasets().then(response => {
+    fetchAllDatasets(setLoading(false)).then(response => {
+      setLoading(true);
       setDatasets(response.datasets_response);
     });
   }, []);
@@ -79,31 +85,34 @@ export default function ThreatExchangeSettingsTab() {
             <Button
               variant="primary"
               onClick={() => {
-                handleShow();
+                setSyncing(false);
+                setToastBody('Privacy groups are up to date!');
+                setShowToast(true);
                 onSync();
               }}
               style={{marginLeft: 10}}>
+              <Spinner
+                hidden={syncing}
+                as="span"
+                animation="border"
+                size="sm"
+                role="status"
+                aria-hidden="true"
+              />
+              <span className="sr-only">Loading...</span>
               Sync
             </Button>
           </OverlayTrigger>
-          <Modal show={show} onHide={handleClose}>
-            <Modal.Header closeButton>
-              <Modal.Title>Sync ThreatExchange Settings</Modal.Title>
-            </Modal.Header>
-            <Modal.Body>
-              Sync process is successfully completed! <br /> Privacy groups is
-              up to date
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="secondary" onClick={handleClose}>
-                Close
-              </Button>
-            </Modal.Footer>
-          </Modal>
         </Row>
       </Card.Header>
       <Card.Body>
+        <Toast onClose={() => setShowToast(false)} show={showToast} autohide>
+          <Toast.Body>{toastBody}</Toast.Body>
+        </Toast>
         <Row className="mt-3">
+          <Spinner hidden={loading} animation="border" role="status">
+            <span className="sr-only">Loading...</span>
+          </Spinner>
           {datasets.length === 0
             ? null
             : datasets.map(dataset => (
@@ -116,6 +125,8 @@ export default function ThreatExchangeSettingsTab() {
                   writeBack={dataset.write_back}
                   onSave={onPrivacyGroupSave}
                   onDelete={onPrivacyGroupDelete}
+                  setShowToast={setShowToast}
+                  setToastBody={setToastBody}
                 />
               ))}
         </Row>
@@ -132,6 +143,8 @@ function ThreatExchangePrivacyGroupCard({
   writeBack,
   onSave,
   onDelete,
+  setShowToast,
+  setToastBody,
 }) {
   const [originalFetcherActive, setOriginalFetcherActive] = useState(
     fetcherActive,
@@ -145,19 +158,16 @@ function ThreatExchangePrivacyGroupCard({
   const onSwitchWriteBack = () => {
     setLocalWriteBack(!localWriteBack);
   };
-  const [show, setShow] = useState(false);
-  const handleClose = () => setShow(false);
-  const handleShow = () => setShow(true);
 
   return (
     <>
       <Col lg={4} sm={6} xs={12} className="mb-4">
         <Card className="text-center">
           <Card.Header
-            className={inUse ? 'text-white bg-success' : 'text-white bg-light'}>
-            <h4 className="mb-0">
-              <CopyableTextField text={privacyGroupName} />
-            </h4>
+            className={
+              inUse ? 'text-white bg-success' : 'text-white bg-secondary'
+            }>
+            <h4 className="mb-0">{privacyGroupName}</h4>
           </Card.Header>
           <Card.Subtitle className="mt-2 mb-2 text-muted">
             <CopyableTextField text={privacyGroupId} />
@@ -181,17 +191,6 @@ function ThreatExchangePrivacyGroupCard({
             </Form>
           </Card.Body>
           <Card.Footer>
-            <Modal show={show} onHide={handleClose}>
-              <Modal.Header closeButton>
-                <Modal.Title>Save</Modal.Title>
-              </Modal.Header>
-              <Modal.Body>Your change is saved!</Modal.Body>
-              <Modal.Footer>
-                <Button variant="secondary" onClick={handleClose}>
-                  Close
-                </Button>
-              </Modal.Footer>
-            </Modal>
             {localWriteBack === originalWriteBack &&
             localFetcherActive === originalFetcherActive ? null : (
               <div>
@@ -200,12 +199,13 @@ function ThreatExchangePrivacyGroupCard({
                   onClick={() => {
                     setOriginalFetcherActive(localFetcherActive);
                     setOriginalWriteBack(localWriteBack);
+                    setToastBody('Changes are saved!');
+                    setShowToast(true);
                     onSave({
                       privacyGroupId,
                       localFetcherActive,
                       localWriteBack,
                     });
-                    handleShow();
                   }}>
                   Save
                 </Button>
@@ -216,6 +216,8 @@ function ThreatExchangePrivacyGroupCard({
                 <Button
                   variant="secondary"
                   onClick={() => {
+                    setToastBody('The privacy group is deleted!');
+                    setShowToast(true);
                     onDelete(privacyGroupId);
                   }}>
                   Delete
@@ -237,4 +239,6 @@ ThreatExchangePrivacyGroupCard.propTypes = {
   writeBack: PropTypes.bool.isRequired,
   onSave: PropTypes.func.isRequired,
   onDelete: PropTypes.func.isRequired,
+  setShowToast: PropTypes.func.isRequired,
+  setToastBody: PropTypes.func.isRequired,
 };
